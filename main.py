@@ -70,7 +70,7 @@ class QQAdminPlugin(Star):
 
     @filter.command("禁言", desc="禁言 <秒数> @群友")
     @perm_required(PermLevel.ADMIN)
-    async def set_group_ban(self, event: AiocqhttpMessageEvent, ban_time=None):
+    async def set_group_ban(self, event: AiocqhttpMessageEvent, ban_time: int | None = None):
         await self.normal.set_group_ban(event, ban_time)
 
     @filter.command("禁我", desc="禁我 <秒数>")
@@ -209,12 +209,85 @@ class QQAdminPlugin(Star):
         """内置禁词 开/关"""
         await self.banpro.handle_builtin_ban_words(event, mode)
 
+    @filter.command("链接白名单")
+    @perm_required(PermLevel.ADMIN, perm_key="word_ban")
+    async def handle_link_whitelist(self, event: AiocqhttpMessageEvent):
+        """链接白名单 [+域名/-域名/域名列表]，无参数查看"""
+        await self.banpro.handle_link_whitelist(event)
+
+    @filter.command("链接过滤")
+    @perm_required(PermLevel.ADMIN, perm_key="word_ban")
+    async def handle_filter_non_whitelist_links(
+        self, event: AiocqhttpMessageEvent, mode: str | bool | None = None
+    ):
+        """链接过滤 开/关"""
+        await self.banpro.handle_filter_non_whitelist_links(event, mode)
+
+    @filter.command("撤回管理员链接")
+    @perm_required(PermLevel.ADMIN, perm_key="word_ban")
+    async def handle_recall_admin_links(
+        self, event: AiocqhttpMessageEvent, mode: str | bool | None = None
+    ):
+        """撤回管理员链接 开/关"""
+        await self.banpro.handle_recall_admin_links(event, mode)
+
+    @filter.command("链接撤回禁言")
+    @perm_required(PermLevel.ADMIN, perm_key="word_ban")
+    async def handle_link_recall_ban(
+        self, event: AiocqhttpMessageEvent, mode: str | bool | None = None
+    ):
+        """链接撤回禁言 开/关"""
+        await self.banpro.handle_link_recall_ban(event, mode)
+
+    @filter.command("链接撤回禁言时长")
+    @perm_required(PermLevel.ADMIN, perm_key="word_ban")
+    async def handle_link_recall_ban_time(
+        self, event: AiocqhttpMessageEvent, seconds: int | None = None
+    ):
+        """链接撤回禁言时长 <秒数>"""
+        await self.banpro.handle_link_recall_ban_time(event, seconds)
+
+    @filter.command("链接撤回禁言提醒")
+    @perm_required(PermLevel.ADMIN, perm_key="word_ban")
+    async def handle_link_recall_warn(
+        self, event: AiocqhttpMessageEvent, mode: str | bool | None = None
+    ):
+        """链接撤回禁言提醒 开/关"""
+        await self.banpro.handle_link_recall_warn(event, mode)
+
+    @filter.command("链接撤回警告语")
+    @perm_required(PermLevel.ADMIN, perm_key="word_ban")
+    async def handle_link_recall_warn_text(self, event: AiocqhttpMessageEvent):
+        """链接撤回警告语 <文本|重置>，无参数查看"""
+        await self.banpro.handle_link_recall_warn_text(event)
+
+    @filter.command("链接撤回禁言管理员")
+    @perm_required(PermLevel.ADMIN, perm_key="word_ban")
+    async def handle_link_recall_ban_admin(
+        self, event: AiocqhttpMessageEvent, mode: str | bool | None = None
+    ):
+        """链接撤回禁言管理员 开/关"""
+        await self.banpro.handle_link_recall_ban_admin(event, mode)
+
+    @filter.command("链接撤回踢出")
+    @perm_required(PermLevel.ADMIN, perm_key="word_ban")
+    async def handle_link_recall_kick_count(
+        self, event: AiocqhttpMessageEvent, count: int | None = None
+    ):
+        """链接撤回踢出 <次数>，0 关闭"""
+        await self.banpro.handle_link_recall_kick_count(event, count)
+
+    @filter.command("清空链接撤回计数")
+    @perm_required(PermLevel.ADMIN, perm_key="word_ban")
+    async def handle_link_recall_counts_clear(self, event: AiocqhttpMessageEvent):
+        """清空本群链接撤回踢出计数"""
+        await self.banpro.handle_link_recall_counts_clear(event)
+
     @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
     @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
     async def on_ban_words(self, event: AiocqhttpMessageEvent):
         """自动检测违禁词，撤回并禁言"""
-        if not event.is_admin():
-            await self.banpro.on_ban_words(event)
+        await self.banpro.on_ban_words(event)
 
     @filter.command("刷屏禁言")
     @perm_required(PermLevel.ADMIN, perm_key="spamming")

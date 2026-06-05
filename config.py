@@ -173,17 +173,33 @@ class PluginConfig(ConfigNode):
     def get_ban_time_with_range(
         self, random_ban_time: str | None, seconds: int | None = None
     ) -> int:
+        """获取禁言时长。
+
+        - 未传入 seconds：按 random_ban_time 随机。
+        - 已传入 seconds：尊重命令里的自定义秒数，不再被随机范围上限夹到 5 分钟。
+        """
+        if isinstance(seconds, int) and seconds > 0:
+            return min(seconds, 2592000)
+
         if not random_ban_time:
             return self.get_ban_time(seconds)
 
         min_ban_time, max_ban_time = self._resolve_ban_time_range(random_ban_time)
-        if not seconds or not isinstance(seconds, int):
-            return random.randint(min_ban_time, max_ban_time)
-        return min(max(seconds, min_ban_time), max_ban_time)
+        return random.randint(min_ban_time, max_ban_time)
 
     def build_group_default_config(self) -> dict[str, Any]:
         return {
             **self.default,
+            "link_whitelist": [],
+            "filter_non_whitelist_links": False,
+            "recall_admin_links": True,
+            "link_recall_ban": False,
+            "link_recall_ban_admin": False,
+            "link_recall_ban_time": 0,
+            "link_recall_warn": True,
+            "link_recall_warn_text": "你发的链接不符合社区规定警告一次，二次直接踢出群聊",
+            "link_recall_kick_count": 0,
+            "link_recall_counts": {},
             "admin_audit": self.admin_audit,
             "random_ban_time": self.random_ban_time,
             "vote_ban": {
