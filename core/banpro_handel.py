@@ -15,6 +15,8 @@ from ..config import PluginConfig
 from ..data import QQAdminDB
 from ..utils import get_ats, get_nickname, parse_bool
 
+DEFAULT_LINK_RECALL_WARN_TEXT = "你发的链接不符合社区规定警告一次，二次直接踢出群聊"
+
 
 class BanproHandle:
     def __init__(self, config: PluginConfig, db: QQAdminDB):
@@ -37,14 +39,24 @@ class BanproHandle:
         """判断发送者是否为 QQ 群主/管理员；兼容 AstrBot 超管。"""
         if event.is_admin():
             return True
+
+        group_id = event.get_group_id()
+        user_id = event.get_sender_id()
         try:
             info = await event.bot.get_group_member_info(
-                group_id=int(event.get_group_id()),
-                user_id=int(event.get_sender_id()),
+                group_id=int(group_id),
+                user_id=int(user_id),
                 no_cache=True,
             )
             return info.get("role") in ("owner", "admin")
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "获取群成员权限失败，按非管理员处理: group_id=%s, user_id=%s, error=%r",
+                group_id,
+                user_id,
+                exc,
+                exc_info=True,
+            )
             return False
 
     async def handle_word_ban_time(
@@ -246,7 +258,7 @@ class BanproHandle:
         """链接撤回警告语 <文本|重置>；无参数查看。"""
         gid = event.get_group_id()
         raw = event.message_str.partition(" ")[2].strip()
-        default_text = "你发的链接不符合社区规定警告一次，二次直接踢出群聊"
+        default_text = DEFAULT_LINK_RECALL_WARN_TEXT
         if not raw:
             text = await self.db.get(gid, "link_recall_warn_text", default_text)
             await event.send(event.plain_result(f"本群链接撤回警告语：{text}"))
@@ -332,25 +344,11 @@ class BanproHandle:
 
     @staticmethod
     def _message_contains_whitelist_domain(message_text: str, whitelist: list[str]) -> bool:
-        msg = str(message_text or "").lower()
-        if not msg:
-            return False
-        for item in whitelist or []:
-            domain = str(item or "").strip().lower()
-            if not domain:
-                continue
-            if domain[:1] in {"+", "-"}:
-                domain = domain[1:].strip()
-            domain_host = BanproHandle._normalize_link_host(domain)
-            candidates = [domain]
-            if domain_host and domain_host not in candidates:
-                candidates.append(domain_host)
-            if domain_host.startswith("www."):
-                candidates.append(domain_host[4:])
-            for candidate in candidates:
-                if candidate and candidate in msg:
-                    return True
-        return False
+        """仅基于已解析出的链接做 host 级白名单匹配。"""
+        links = BanproHandle._extract_links(str(message_text or ""))
+        return bool(links) and all(
+            BanproHandle._link_in_whitelist(link, whitelist) for link in links
+        )
 
     @staticmethod
     def _normalize_link_host(value: str) -> str:
@@ -380,8 +378,6 @@ class BanproHandle:
             if not item_host:
                 continue
             if host == item_host or host.endswith(f".{item_host}"):
-                return True
-            if item_l in link_l:
                 return True
         return False
 
@@ -420,7 +416,7 @@ class BanproHandle:
         warn_text = await self.db.get(
             gid,
             "link_recall_warn_text",
-            "你发的链接不符合社区规定警告一次，二次直接踢出群聊",
+            DEFAULT_LINK_RECALL_WARN_TEXT,
         )
         if not warn_text:
             return
@@ -450,31 +446,35 @@ class BanproHandle:
             message_id = event.message_obj.message_id
             await event.bot.delete_msg(message_id=int(message_id))
             recall_success = True
-        except Exception:
-            pass
-
-        kicked = False
+        except Exception as exc:
+            logger.warning(
+                "撤回非白名单链接消息失败: group_id=%s, user_id=%s, error=%r",
+                gid,
+                event.get_sender_id(),
+                exc,
+                exc_info=True,
+            )
         if recall_success:
             kicked = await self._handle_link_recall_kick(event, is_admin)
 
         if recall_success:
             await self._send_link_recall_warning(event, gid, kicked)
 
-        if await self.db.get(gid, "link_recall_ban", False):
-            if is_admin and not await self.db.get(gid, "link_recall_ban_admin", False):
-                return True
-            ban_time = await self.db.get(gid, "link_recall_ban_time", 0)
-            if ban_time > 0:
-                try:
-                    await event.bot.set_group_ban(
-                        group_id=int(event.get_group_id()),
-                        user_id=int(event.get_sender_id()),
-                        duration=int(ban_time),
-                    )
-                except Exception:
-                    logger.error(
-                        f"bot在群{event.get_group_id()}权限不足，撤回链接后禁言失败"
-                    )
+            if await self.db.get(gid, "link_recall_ban", False):
+                if is_admin and not await self.db.get(gid, "link_recall_ban_admin", False):
+                    return True
+                ban_time = await self.db.get(gid, "link_recall_ban_time", 0)
+                if ban_time > 0:
+                    try:
+                        await event.bot.set_group_ban(
+                            group_id=int(event.get_group_id()),
+                            user_id=int(event.get_sender_id()),
+                            duration=int(ban_time),
+                        )
+                    except Exception:
+                        logger.error(
+                            f"bot在群{event.get_group_id()}权限不足，撤回链接后禁言失败"
+                        )
         return True
 
     async def _handle_link_recall_kick(
