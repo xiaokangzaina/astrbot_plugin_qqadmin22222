@@ -348,7 +348,7 @@ async function saveCurrentGroupBeforeSwitch(nextGroupId) {
   }
 
   await persistGroupConfig(currentGroupId, {
-    refreshList: false,
+    refreshList: true,
     rerenderCurrent: false,
   });
 }

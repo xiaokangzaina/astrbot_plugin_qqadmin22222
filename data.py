@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import json
+import time
 
 import aiosqlite
 
@@ -48,6 +49,7 @@ class QQAdminDB:
 
     REVERSE_FIELD_MAP = {v: k for k, v in FIELD_MAP.items()}
     FOLLOW_DEFAULT_MARKER = "__follow_default__"
+    UPDATED_AT_MARKER = "__qqadmin_updated_at__"
 
     # ================================================================
 
@@ -112,7 +114,7 @@ class QQAdminDB:
         return {
             key: copy.deepcopy(value)
             for key, value in data.items()
-            if key != self.FOLLOW_DEFAULT_MARKER
+            if key not in {self.FOLLOW_DEFAULT_MARKER, self.UPDATED_AT_MARKER}
         }
 
     def _is_follow_default_data(self, data: dict | None) -> bool:
@@ -142,13 +144,26 @@ class QQAdminDB:
         base[self.FOLLOW_DEFAULT_MARKER] = False
         return base
 
+    def _touch_group_record(self, data: dict) -> dict:
+        data[self.UPDATED_AT_MARKER] = time.time()
+        return data
+
+    def get_group_updated_at(self, gid: str) -> float:
+        raw = self._cache.get(str(gid))
+        if not isinstance(raw, dict):
+            return 0.0
+        try:
+            return float(raw.get(self.UPDATED_AT_MARKER) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
     # ============================== 基础：确保配置存在 ==============================
 
     async def ensure_group(self, gid: str):
         """确保存在群配置，若没有则按 default_cfg 初始化"""
         if gid not in self._cache or self._is_follow_default_data(self._cache.get(gid)):
-            self._cache[gid] = self._build_explicit_group_record(
-                self.get_group_snapshot(gid)
+            self._cache[gid] = self._touch_group_record(
+                self._build_explicit_group_record(self.get_group_snapshot(gid))
             )
             await self._save_to_db(gid, self._cache[gid])
 
@@ -222,10 +237,13 @@ class QQAdminDB:
         """
         await self.ensure_group(gid)
         self._cache[gid][field] = value
+        self._touch_group_record(self._cache[gid])
         await self._save_to_db(gid, self._cache[gid])
 
     async def replace_group(self, gid: str, data: dict):
-        self._cache[gid] = self._build_explicit_group_record(data)
+        self._cache[gid] = self._touch_group_record(
+            self._build_explicit_group_record(data)
+        )
         await self._save_to_db(gid, self._cache[gid])
 
     async def add(self, gid: str, field: str, value):
@@ -342,6 +360,7 @@ class QQAdminDB:
 
             data[eng_key] = value
 
+        self._touch_group_record(data)
         await self._save_to_db(gid, data)
         return self.get_group_snapshot(gid)
 
@@ -356,13 +375,9 @@ class QQAdminDB:
             return
 
         normalized_gid = str(gid)
-        if self._conn:
-            await self._conn.execute(
-                "DELETE FROM groups WHERE group_id = ?",
-                (normalized_gid,),
-            )
-            await self._conn.commit()
-        self._cache.pop(normalized_gid, None)
+        record = self._touch_group_record({self.FOLLOW_DEFAULT_MARKER: True})
+        self._cache[normalized_gid] = record
+        await self._save_to_db(normalized_gid, record)
         logger.info(f"群聊{normalized_gid}的群管配置已重新跟随默认值")
 
     async def reset_to_default(self, gid: str | None = None):

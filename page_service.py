@@ -65,17 +65,25 @@ class QQAdminPageService:
         result: list[dict[str, Any]] = [self.get_default_group_entry()]
         stale_group_ids: list[str] = []
 
+        configured_group_ids = set(self.db.list_group_ids())
+        result_groups: list[dict[str, Any]] = []
+
         for group in groups:
             group_id = str(group.get("group_id", "")).strip()
             if self._should_delete_group(group):
                 stale_group_ids.append(group_id)
                 continue
-            result.append(
+            updated_at = self.db.get_group_updated_at(group_id)
+            result_groups.append(
                 {
                     **group,
                     "is_default_group": False,
+                    "is_configured_group": group_id in configured_group_ids,
+                    "updated_at": updated_at,
                 }
             )
+
+        result.extend(self._sort_groups_for_page(result_groups))
 
         for group_id in stale_group_ids:
             await self._delete_group_data(group_id)
@@ -171,6 +179,22 @@ class QQAdminPageService:
         self.cfg.save_config()
         self.group_cache.invalidate()
         return self.get_default_group_config()
+
+    @staticmethod
+    def _sort_groups_for_page(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        def group_id_key(group: dict[str, Any]) -> int | str:
+            group_id = str(group.get("group_id", ""))
+            return int(group_id) if group_id.isdigit() else group_id
+
+        return sorted(
+            groups,
+            key=lambda group: (
+                -float(group.get("updated_at") or 0),
+                not str(group.get("group_id", "")).isdigit(),
+                group_id_key(group),
+                group.get("group_name", ""),
+            ),
+        )
 
     @staticmethod
     def _load_schema(schema_path: Path) -> dict[str, Any]:
