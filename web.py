@@ -47,12 +47,6 @@ class QQAdminWebController:
                 ["POST"],
                 "Refresh QQ group list",
             ),
-            (
-                "/settings/groups/roles",
-                self.page_refresh_group_roles,
-                ["POST"],
-                "Load bot roles for QQ groups",
-            ),
             ("/settings/group", self.page_get_group, ["GET"], "Load one group config"),
             (
                 "/settings/group",
@@ -117,18 +111,6 @@ class QQAdminWebController:
     async def page_refresh_groups(self):
         return self._jsonify(
             {"ok": True, "data": await self.service.list_groups(force=True)}
-        )
-
-    async def page_refresh_group_roles(self):
-        payload = await self._request().get_json(force=True, silent=True) or {}
-        force = str(payload.get("force", "")).strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
-        return self._jsonify(
-            {"ok": True, "data": await self.service.list_groups_with_bot_roles(force)}
         )
 
     async def page_get_group(self):

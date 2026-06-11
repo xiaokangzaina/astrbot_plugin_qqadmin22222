@@ -1,6 +1,9 @@
 from aiocqhttp import CQHttp
 
+from aiocqhttp import CQHttp
+
 from astrbot.api import logger
+from astrbot.core.message.components import At, Plain
 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import (
     AiocqhttpMessageEvent,
 )
@@ -16,12 +19,16 @@ class JoinHandle:
         self.db = db
         self._fail: dict[str, int] = {}
 
-    async def _send_admin(self, client: CQHttp, message: str):
-        for admin_id in self.cfg.admins_id:
+    async def _send_admin(self, client: CQHttp, message: str, admin_ids: list | None = None):
+        target_ids = self.cfg._clean_ids(admin_ids or [])
+        if not target_ids:
+            logger.warning("进群事件仅通知自定义ID已开启，但未配置进群事件通知ID")
+            return
+        for admin_id in target_ids:
             try:
                 await client.send_private_msg(user_id=int(admin_id), message=message)
             except Exception as e:
-                logger.error(f"无法发送消息给bot管理员：{e}")
+                logger.error(f"无法发送进群事件通知给自定义ID {admin_id}：{e}")
 
     # -----------修改配置-----------------
 
@@ -187,6 +194,34 @@ class JoinHandle:
             await event.send(event.plain_result(f"本群退群拉黑：{status}"))
 
     # ---------辅助函数-----------------
+
+    @staticmethod
+    def _format_join_welcome(template: str, uid: str, nickname: str) -> str:
+        """格式化进群欢迎词，支持 {nickname}/{uid}/{qq}/{at}。"""
+        text = str(template or "")
+        for key, value in {
+            "{nickname}": str(nickname or uid),
+            "{uid}": str(uid),
+            "{qq}": str(uid),
+        }.items():
+            text = text.replace(key, value)
+        return text
+
+    @staticmethod
+    def _build_join_welcome_chain(welcome: str, uid: str):
+        """构建带 At 的欢迎消息链；未写 {at} 时默认开头艾特。"""
+        text = str(welcome or "")
+        if "{at}" not in text:
+            return [At(qq=uid), Plain(text=f" {text}")]
+        chain = []
+        parts = text.split("{at}")
+        for index, part in enumerate(parts):
+            if part:
+                chain.append(Plain(text=part))
+            if index < len(parts) - 1:
+                chain.append(At(qq=uid))
+        return chain
+
     async def should_approve(
         self,
         gid: str,
@@ -306,10 +341,11 @@ class JoinHandle:
                 notice += f"\n\n{approve_msg}"
 
             group_config = self.db.get_group_snapshot(gid)
-            if group_config.get("admin_audit", self.cfg.admin_audit):
-                await self._send_admin(client, notice)
-            else:
-                await event.send(event.plain_result(notice))
+            if group_config.get("join_notice_enabled", self.cfg.join_notice_enabled):
+                custom_admin_ids = group_config.get(
+                    "join_notice_admin_ids", self.cfg.join_notice_admin_ids
+                )
+                await self._send_admin(client, notice, custom_admin_ids)
 
         # 主动退群事件
         elif (
@@ -332,8 +368,9 @@ class JoinHandle:
             join_welcome = await self.db.get(gid, "join_welcome")
             if join_welcome:
                 nickname = await get_nickname(event, uid)
-                welcome = join_welcome.format(nickname=nickname)
-                await event.send(event.plain_result(welcome))
+                welcome = self._format_join_welcome(join_welcome, uid, nickname)
+                chain = self._build_join_welcome_chain(welcome, uid)
+                await event.send(event.chain_result(chain))
             # 进群禁言
             join_ban_time = await self.db.get(gid, "join_ban_time")
             if join_ban_time > 0:

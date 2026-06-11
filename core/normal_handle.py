@@ -19,9 +19,14 @@ class NormalHandle:
     async def set_group_ban(
         self,
         event: AiocqhttpMessageEvent,
-        ban_time: int | None = None,
+        ban_time: int | str | None = None,
     ):
         """禁言 60 @user"""
+        try:
+            ban_time = int(ban_time) if ban_time is not None else None
+        except (TypeError, ValueError):
+            ban_time = None
+
         group_config = self.db.get_group_snapshot(event.get_group_id())
         ban_time = self.cfg.get_ban_time_with_range(
             group_config.get("random_ban_time"), ban_time

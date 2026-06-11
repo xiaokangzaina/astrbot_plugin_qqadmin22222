@@ -59,7 +59,8 @@ class PermissionManager:
 
     def lazy_init(self, config: PluginConfig, db: QQAdminDB):
         if self._initialized:
-            raise RuntimeError("PermissionManager already initialized")
+            self.refresh(config, db)
+            return
         self.cfg = config
         self.db = db
         self._initialized = True
@@ -74,15 +75,29 @@ class PermissionManager:
         self, event: AiocqhttpMessageEvent, user_id: str | int
     ) -> PermLevel:
         group_id = event.get_group_id()
-        if int(group_id) == 0 or int(user_id) == 0:
-            return PermLevel.UNKNOWN
-        if self.cfg and str(user_id) in self.cfg.admins_id:
+        user_id_str = str(user_id)
+
+        # AstrBot 管理员优先按超管处理，避免 QQNT/NapCat 返回 uid 导致 get_group_member_info 失败
+        if user_id_str == str(event.get_sender_id()) and event.is_admin():
             return PermLevel.SUPERUSER
+
+        if self.cfg and user_id_str in self.cfg.admins_id:
+            return PermLevel.SUPERUSER
+
+        if not str(group_id).isdigit() or not user_id_str.isdigit():
+            return PermLevel.UNKNOWN
         try:
             info = await event.bot.get_group_member_info(
                 group_id=int(group_id), user_id=int(user_id), no_cache=True
             )
         except Exception:
+            if user_id_str == str(event.get_sender_id()) and event.message_obj.raw_message:
+                role = event.message_obj.raw_message.get("sender", {}).get("role", "unknown")
+                match role:
+                    case "owner":
+                        return PermLevel.OWNER
+                    case "admin":
+                        return PermLevel.ADMIN
             return PermLevel.UNKNOWN
         role = info.get("role", "unknown")
         level = int(info.get("level", 0))

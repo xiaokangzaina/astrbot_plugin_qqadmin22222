@@ -53,7 +53,6 @@ class QQAdminPageService:
             "avatar": "",
             "member_count": 0,
             "max_member_count": 0,
-            "bot_role": "unknown",
             "is_default_group": True,
             "config": {
                 FOLLOW_DEFAULT_KEY: False,
@@ -63,20 +62,6 @@ class QQAdminPageService:
 
     async def list_groups(self, force: bool = False) -> list[dict[str, Any]]:
         groups = await self.group_cache.list_groups(force=force)
-        return await self._build_group_entries(groups)
-
-    async def list_groups_with_bot_roles(
-        self, force: bool = False
-    ) -> list[dict[str, Any]]:
-        groups = await self.group_cache.list_groups_with_bot_roles(
-            force_bot_roles=force
-        )
-        return await self._build_group_entries(groups)
-
-    async def _build_group_entries(
-        self,
-        groups: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = [self.get_default_group_entry()]
         stale_group_ids: list[str] = []
 
@@ -225,8 +210,10 @@ class QQAdminPageService:
         }
         self._merge_dict(self.cfg.default, default_updates)
 
-        if "admin_audit" in updated:
-            self.cfg.admin_audit = updated["admin_audit"]
+        if "join_notice_enabled" in updated:
+            self.cfg.join_notice_enabled = updated["join_notice_enabled"]
+        if "join_notice_admin_ids" in updated:
+            self.cfg.join_notice_admin_ids = updated["join_notice_admin_ids"]
         if "random_ban_time" in updated:
             self.cfg.random_ban_time = updated["random_ban_time"]
         if "vote_ban" in updated:
@@ -243,7 +230,8 @@ class QQAdminPageService:
 
     def _get_group_overlay_schema(self) -> dict[str, Any]:
         keys = [
-            "admin_audit",
+            "join_notice_enabled",
+            "join_notice_admin_ids",
             "random_ban_time",
             "vote_ban",
             "llm_get_msg_count",

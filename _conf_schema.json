@@ -134,14 +134,84 @@
           "step": 60
         },
         "default": 0
+      },
+      "link_whitelist": {
+        "description": "链接白名单",
+        "hint": "允许出现的域名白名单，支持裸域名、子域名，命中后不会触发链接撤回",
+        "type": "list",
+        "default": []
+      },
+      "filter_non_whitelist_links": {
+        "description": "过滤非白名单链接",
+        "hint": "开启后，消息中出现不在白名单内的链接时会自动撤回",
+        "type": "bool",
+        "default": false
+      },
+      "recall_admin_links": {
+        "description": "撤回管理员链接",
+        "hint": "开启后，管理员/群主发送的非白名单链接也会被撤回",
+        "type": "bool",
+        "default": true
+      },
+      "link_recall_ban": {
+        "description": "链接撤回后禁言",
+        "hint": "撤回非白名单链接后，是否继续禁言发送者",
+        "type": "bool",
+        "default": false
+      },
+      "link_recall_ban_admin": {
+        "description": "链接撤回后禁言管理员",
+        "hint": "开启后，管理员/群主发送违规链接被撤回后也会尝试禁言",
+        "type": "bool",
+        "default": false
+      },
+      "link_recall_ban_time": {
+        "description": "链接撤回禁言时长（秒）",
+        "hint": "撤回非白名单链接后附加禁言的时长，0 表示不禁言",
+        "type": "int",
+        "slider": {
+          "min": 0,
+          "max": 600,
+          "step": 60
+        },
+        "default": 0
+      },
+      "link_recall_warn": {
+        "description": "链接/禁词撤回提醒",
+        "hint": "撤回违规链接或禁词消息后，是否在群内发送警告提醒，不依赖是否禁言",
+        "type": "bool",
+        "default": true
+      },
+      "link_recall_warn_text": {
+        "description": "链接/禁词撤回警告语",
+        "hint": "触发链接或禁词撤回后发送的提示文本，不依赖是否禁言",
+        "type": "string",
+        "default": "你发的链接不符合社区规定警告一次，二次直接踢出群聊"
+      },
+      "link_recall_kick_count": {
+        "description": "链接撤回踢出次数",
+        "hint": "同一成员违规链接被撤回累计达到该次数后自动踢出，0 表示关闭",
+        "type": "int",
+        "slider": {
+          "min": 0,
+          "max": 10,
+          "step": 1
+        },
+        "default": 0
       }
     }
   },
-  "admin_audit": {
-    "description": "进群事件仅通知bot管理员",
-    "hint": "如果开启，则进群事件仅通知bot管理员，不再将通知发送在对应群聊",
+  "join_notice_enabled": {
+    "description": "进群通知",
+    "hint": "开启后，进群申请通知只发送给下方自定义填写的ID；关闭后不发送进群通知。不会再通知Bot管理员，也不会发送到对应群聊。",
     "type": "bool",
     "default": false
+  },
+  "join_notice_admin_ids": {
+    "description": "进群事件通知ID",
+    "hint": "进群通知开启后，只发送给这里填写的QQ/ID。可填写多个；为空则不会发送通知。",
+    "type": "list",
+    "default": []
   },
   "random_ban_time": {
     "description": "随机禁言配置",

@@ -26,7 +26,6 @@ let allGroups = [];
 let detachContextHandler = null;
 let detachSystemThemeHandler = null;
 let themePreference = loadThemePreference();
-let groupRoleSyncToken = 0;
 
 const els = {
   groupForm: document.getElementById("groupForm"),
@@ -214,11 +213,6 @@ function applyGroupList(groups) {
   filterAndRenderGroups();
 }
 
-function scheduleGroupRoleSync(options = {}) {
-  const requestToken = ++groupRoleSyncToken;
-  void syncGroupRoles(requestToken, options);
-}
-
 function filterGroups() {
   const keyword = String(els.groupSearchInput.value || "")
     .trim()
@@ -273,23 +267,6 @@ async function loadBootstrapData() {
   const data = await api.safeGet("settings/bootstrap");
   bootstrapData = data;
   applyGroupList(data.groups || []);
-}
-
-async function syncGroupRoles(requestToken, options = {}) {
-  const { force = false } = options;
-  try {
-    const groups = await api.safePost("settings/groups/roles", {
-      force: force ? "1" : "0",
-    });
-    if (requestToken !== groupRoleSyncToken) {
-      return;
-    }
-    applyGroupList(groups || []);
-  } catch (error) {
-    if (requestToken === groupRoleSyncToken) {
-      console.debug?.("Failed to sync group bot roles", error);
-    }
-  }
 }
 
 async function refreshGroups() {
@@ -414,7 +391,6 @@ function bindEvents() {
   els.refreshGroupsBtn.addEventListener("click", async () => {
     try {
       await refreshGroups();
-      scheduleGroupRoleSync({ force: true });
       if (currentGroup?.group_id) {
         await loadGroupConfig(currentGroup.group_id);
       }
@@ -489,7 +465,6 @@ async function init() {
 
     bindEvents();
     await loadBootstrapData();
-    scheduleGroupRoleSync();
     await loadGroupConfig(DEFAULT_GROUP_ID);
   } catch (error) {
     const message = error?.message || "页面初始化失败";
