@@ -63,15 +63,20 @@ class QQAdminPageService:
     async def list_groups(self, force: bool = False) -> list[dict[str, Any]]:
         groups = await self.group_cache.list_groups(force=force)
         result: list[dict[str, Any]] = [self.get_default_group_entry()]
-        stale_group_ids: list[str] = []
-
         configured_group_ids = set(self.db.list_group_ids())
+        live_group_ids = {
+            str(group.get("group_id", "")).strip()
+            for group in groups
+            if str(group.get("group_id", "")).strip()
+        }
+        stale_group_ids: list[str] = [
+            group_id for group_id in configured_group_ids if group_id not in live_group_ids
+        ]
         result_groups: list[dict[str, Any]] = []
 
         for group in groups:
             group_id = str(group.get("group_id", "")).strip()
-            if self._should_delete_group(group):
-                stale_group_ids.append(group_id)
+            if not group_id:
                 continue
             updated_at = self.db.get_group_updated_at(group_id)
             result_groups.append(
@@ -221,11 +226,7 @@ class QQAdminPageService:
         group_id = str(group_info.get("group_id", "")).strip()
         if not group_id or group_id == DEFAULT_GROUP_ID:
             return False
-        try:
-            member_count = int(group_info.get("member_count", 0))
-        except (TypeError, ValueError):
-            member_count = 0
-        return member_count <= 0
+        return group_info.get("source") == "cached"
 
     def _apply_group_level_updates(self, updated: dict[str, Any]) -> None:
         default_fields = self.schema.get("default", {}).get("items", {})

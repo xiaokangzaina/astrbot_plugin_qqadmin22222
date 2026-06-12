@@ -101,11 +101,6 @@ class QQGroupInfoCache:
                 except Exception as exc:
                     logger.warning("Failed to load QQ group list: %s", exc)
 
-            for group_id in self.db.list_group_ids():
-                if group_id not in merged_groups:
-                    merged_groups[group_id] = self._build_fallback_group(group_id)
-                    missing_detail_group_ids.add(group_id)
-
             if missing_detail_group_ids:
                 await self._hydrate_missing_groups(
                     merged_groups, group_clients, missing_detail_group_ids

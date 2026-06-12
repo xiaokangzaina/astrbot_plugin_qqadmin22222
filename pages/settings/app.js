@@ -337,29 +337,12 @@ async function persistGroupConfig(groupId, options = {}) {
   return data;
 }
 
-async function saveCurrentGroupBeforeSwitch(nextGroupId) {
-  const currentGroupId = String(currentGroup?.group_id || "").trim();
-  const targetGroupId = String(nextGroupId || "").trim();
-  if (!currentGroupId || !targetGroupId || currentGroupId === targetGroupId) {
-    return;
-  }
-  if (!els.groupForm.querySelector("[data-path]")) {
-    return;
-  }
-
-  await persistGroupConfig(currentGroupId, {
-    refreshList: true,
-    rerenderCurrent: false,
-  });
-}
-
 async function switchGroup(groupId) {
   const target = String(groupId || "").trim();
   if (!target) {
     return;
   }
 
-  await saveCurrentGroupBeforeSwitch(target);
   await loadGroupConfig(target);
 }
 
