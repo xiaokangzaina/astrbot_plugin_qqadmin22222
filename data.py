@@ -18,6 +18,7 @@ class QQAdminDB:
 
     # ====================== 字段中英文映射 ======================
     FIELD_MAP = {
+        "group_admin_enabled": "群聊总开关",
         "join_switch": "进群审核",
         "join_min_level": "进群等级门槛",
         "join_max_time": "进群尝试次数",

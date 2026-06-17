@@ -187,6 +187,17 @@ def perm_required(
             if event.is_private_chat():
                 return
 
+            config_commands = {"set_config", "reset_config"}
+            if (
+                actual_perm_key not in config_commands
+                and perm_manager.db is not None
+                and not perm_manager.db.get_group_snapshot(event.get_group_id()).get(
+                    "group_admin_enabled", True
+                )
+            ):
+                event.stop_event()
+                return
+
             # 权限管理未初始化
             if not perm_manager._initialized:
                 logger.error(

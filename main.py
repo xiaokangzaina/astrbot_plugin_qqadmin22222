@@ -47,7 +47,7 @@ class QQAdminPlugin(Star):
         self.join = JoinHandle(self.cfg, self.db)
         self.member = MemberHandle(self)
         self.file = FileHandle(self.cfg)
-        self.curfew = CurfewHandle(self.context, self.cfg)
+        self.curfew = CurfewHandle(self.context, self.cfg, self.db)
         self.llm = LLMHandle(self.context, self.cfg, self.db)
         self.web = QQAdminWebController(context, self.cfg, self.db, self.group_cache)
         self.web.register_routes()
@@ -67,6 +67,13 @@ class QQAdminPlugin(Star):
         """平台加载完成时"""
         if not self.curfew.curfew_managers:
             asyncio.create_task(self.curfew.initialize())
+
+    def _is_group_admin_enabled(self, event: AiocqhttpMessageEvent) -> bool:
+        """当前群 QQ群管 总开关。默认开启，无法识别群号时放行。"""
+        group_id = str(event.get_group_id() or "").strip()
+        if not group_id:
+            return True
+        return bool(self.db.get_group_snapshot(group_id).get("group_admin_enabled", True))
 
     @filter.command("禁言", desc="禁言 <秒数> @群友")
     @perm_required(PermLevel.ADMIN)
@@ -287,6 +294,8 @@ class QQAdminPlugin(Star):
     @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
     async def on_ban_words(self, event: AiocqhttpMessageEvent):
         """自动检测违禁词，撤回并禁言"""
+        if not self._is_group_admin_enabled(event):
+            return
         await self.banpro.on_ban_words(event)
 
     @filter.command("刷屏禁言")
@@ -301,6 +310,8 @@ class QQAdminPlugin(Star):
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
     async def spamming_ban(self, event: AiocqhttpMessageEvent):
         """刷屏检测与禁言"""
+        if not self._is_group_admin_enabled(event):
+            return
         await self.banpro.spamming_ban(event)
 
     @filter.command("投票禁言", desc="投票禁言 <秒数> @群友")
@@ -430,6 +441,8 @@ class QQAdminPlugin(Star):
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
     async def event_monitoring(self, event: AiocqhttpMessageEvent):
         """监听进群/退群事件"""
+        if not self._is_group_admin_enabled(event):
+            return
         await self.join.event_monitoring(event)
 
     @filter.command("群友信息", desc="查看群友信息")
@@ -502,6 +515,8 @@ class QQAdminPlugin(Star):
             user_id(string): 要禁言的用户的QQ账号，必定为一串数字，如(12345678)
             duration(number): 禁言持续时间（秒），范围为0~86400, 0表示取消禁言
         """
+        if not self._is_group_admin_enabled(event):
+            return
         try:
             await event.bot.set_group_ban(
                 group_id=int(event.get_group_id()),

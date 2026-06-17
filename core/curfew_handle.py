@@ -21,6 +21,7 @@ from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_platform_adapter import (
 from astrbot.core.star.context import Context
 
 from ..config import PluginConfig
+from ..data import QQAdminDB
 
 
 class CurfewStore:
@@ -62,6 +63,7 @@ class GroupCurfew:
         end_time: str,
         scheduler: AsyncIOScheduler,
         manager: BotCurfewManager | None = None,
+        db: QQAdminDB | None = None,
     ):
         self.bot = bot
         self.group_id = group_id
@@ -69,6 +71,7 @@ class GroupCurfew:
         self._end_time_str = end_time
         self.scheduler = scheduler
         self.manager = manager
+        self.db = db
         self.start_job: Job | None = None
         self.end_job: Job | None = None
         self.whole_ban_status = False
@@ -76,6 +79,11 @@ class GroupCurfew:
 
     async def _enable_curfew(self):
         """开启宵禁"""
+        if self.db and not self.db.get_group_snapshot(self.group_id).get(
+            "group_admin_enabled", True
+        ):
+            logger.info(f"群 {self.group_id} 群管总开关已关闭，跳过宵禁开启")
+            return
         async with self._lock:
             if self.whole_ban_status:
                 return
@@ -157,12 +165,18 @@ class BotCurfewManager:
     """单 Bot 宵禁调度，统一管理多群"""
 
     def __init__(
-        self, bot: CQHttp, bot_id: str, store: CurfewStore, scheduler: AsyncIOScheduler
+        self,
+        bot: CQHttp,
+        bot_id: str,
+        store: CurfewStore,
+        scheduler: AsyncIOScheduler,
+        db: QQAdminDB | None = None,
     ):
         self.bot = bot
         self.bot_id = bot_id
         self.store = store
         self.scheduler = scheduler
+        self.db = db
         self.store.data.setdefault(bot_id, {})
         self.bot_data = self.store.data[bot_id]
         self.tasks: dict[str, GroupCurfew] = {}
@@ -177,6 +191,7 @@ class BotCurfewManager:
                     times["start_time"],
                     times["end_time"],
                     self.scheduler,
+                    db=self.db,
                 )
                 await cw.start_curfew_task()
                 self.tasks[group_id] = cw
@@ -208,7 +223,7 @@ class BotCurfewManager:
         if group_id in self.tasks:
             self.tasks[group_id].stop_curfew_task()
         cw = GroupCurfew(
-            self.bot, group_id, start_time, end_time, self.scheduler, manager=self
+            self.bot, group_id, start_time, end_time, self.scheduler, manager=self, db=self.db
         )
 
         await cw.start_curfew_task()
@@ -229,8 +244,9 @@ class BotCurfewManager:
 class CurfewHandle:
     """多 Bot 宵禁处理类"""
 
-    def __init__(self, context: Context, config: PluginConfig):
+    def __init__(self, context: Context, config: PluginConfig, db: QQAdminDB | None = None):
         self.context = context
+        self.db = db
         tz = self.context.get_config().get("timezone")
         self.timezone = (
             zoneinfo.ZoneInfo(tz) if tz else zoneinfo.ZoneInfo("Asia/Shanghai")
@@ -271,7 +287,7 @@ class CurfewHandle:
         # 宵禁初始化
         try:
             self.store.data.setdefault(bot_id, {})
-            curfew_mgr = BotCurfewManager(client, bot_id, self.store, self.scheduler)
+            curfew_mgr = BotCurfewManager(client, bot_id, self.store, self.scheduler, self.db)
             self.curfew_managers[bot_id] = curfew_mgr
             await curfew_mgr.restore_from_store()
             logger.debug(f"{inst.metadata.id}({bot_id}) 宵禁初始化完成")

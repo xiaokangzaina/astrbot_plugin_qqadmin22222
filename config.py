@@ -191,6 +191,7 @@ class PluginConfig(ConfigNode):
     def build_group_default_config(self) -> dict[str, Any]:
         return {
             **self.default,
+            "group_admin_enabled": self.default.get("group_admin_enabled", True),
             "link_whitelist": [],
             "filter_non_whitelist_links": False,
             "recall_admin_links": True,

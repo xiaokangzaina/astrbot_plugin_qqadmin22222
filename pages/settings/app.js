@@ -188,6 +188,21 @@ function isGroupFieldDisabled(path) {
   return path !== FOLLOW_DEFAULT_KEY;
 }
 
+function buildGroupFormSchema(groupPayload) {
+  const schema = bootstrapData.schema.group || {};
+  if (!groupPayload?.is_default_group || !schema.group_admin_enabled) {
+    return schema;
+  }
+  return {
+    ...schema,
+    group_admin_enabled: {
+      ...schema.group_admin_enabled,
+      description: "新群默认启用群管",
+      hint: "这是默认群模板里的开关，用来决定新群或跟随默认配置的群是否默认启用 QQ 群管；不会单独控制某个已独立配置的群。",
+    },
+  };
+}
+
 function updateGroupActionState() {
   const isDefaultGroup = Boolean(currentGroup?.is_default_group);
   const isFollowingDefault = Boolean(currentGroup?.config?.[FOLLOW_DEFAULT_KEY]);
@@ -250,11 +265,12 @@ function renderGroupForm(groupPayload) {
   renderGroupDetailHeader(els, groupPayload);
   renderSchemaFields(
     els.groupForm,
-    bootstrapData.schema.group || {},
+    buildGroupFormSchema(groupPayload),
     buildGroupFormValues(groupPayload),
     {
       singleColumn: true,
       collapsedObjectPaths: COLLAPSED_GROUP_OBJECT_PATHS,
+      hiddenFields: groupPayload?.is_default_group ? [FOLLOW_DEFAULT_KEY] : [],
       isFieldDisabled: isGroupFieldDisabled,
     }
   );
@@ -306,7 +322,11 @@ function bindFollowDefaultToggle() {
 }
 
 function getCurrentGroupFormPayload() {
-  return collectFormData(els.groupForm);
+  const payload = collectFormData(els.groupForm);
+  if (currentGroup?.is_default_group) {
+    delete payload[FOLLOW_DEFAULT_KEY];
+  }
+  return payload;
 }
 
 async function persistGroupConfig(groupId, options = {}) {

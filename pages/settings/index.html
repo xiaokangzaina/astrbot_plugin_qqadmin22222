@@ -9,15 +9,20 @@
 <body>
     <div class="page-shell">
         <section class="workspace-shell">
+            <header class="hero-panel">
+                <div>
+                    <p class="eyebrow">QQ 群管 · 配置中心</p>
+                    <h1>群配置管理</h1>
+                    <p class="hero-desc">选择左侧群聊后编辑配置。默认模板会作为新群的基础配置，保存后立即生效。</p>
+                </div>
+                <div class="hero-actions">
+                    <button class="ghost-button" id="toggleThemeBtn">主题：自动</button>
+                    <button class="ghost-button" id="refreshGroupsBtn">同步群列表</button>
+                </div>
+            </header>
             <div class="workspace-grid">
                 <aside id="groupListPanel" class="group-list-panel">
                     <div class="toolbar-stack">
-                        <div class="workspace-actions">
-                            <div class="workspace-status">
-                                <button class="ghost-button" id="toggleThemeBtn">主题：自动</button>
-                                <button class="ghost-button" id="refreshGroupsBtn">同步群列表</button>
-                            </div>
-                        </div>
                         <label class="toolbar-field grow">
                             <input id="groupSearchInput" type="search" placeholder="输入群名或群号筛选" aria-label="搜索群" />
                         </label>

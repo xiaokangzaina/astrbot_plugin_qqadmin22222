@@ -1,7 +1,5 @@
 from aiocqhttp import CQHttp
 
-from aiocqhttp import CQHttp
-
 from astrbot.api import logger
 from astrbot.core.message.components import At, Plain
 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import (
@@ -196,13 +194,32 @@ class JoinHandle:
     # ---------辅助函数-----------------
 
     @staticmethod
-    def _format_join_welcome(template: str, uid: str, nickname: str) -> str:
-        """格式化进群欢迎词，支持 {nickname}/{uid}/{qq}/{at}。"""
+    async def _get_group_member_count(client: CQHttp, gid: str) -> str:
+        """获取当前群成员数；失败时返回“未知”，避免欢迎词发送失败。"""
+        try:
+            info = await client.get_group_info(group_id=int(gid))
+            count = info.get("member_count") if isinstance(info, dict) else None
+            if count is None:
+                return "未知"
+            return str(count)
+        except Exception as exc:
+            logger.warning(f"获取群成员数失败: gid={gid}, 错误: {exc}")
+            return "未知"
+
+    @staticmethod
+    def _format_join_welcome(
+        template: str,
+        uid: str,
+        nickname: str,
+        member_count: str = "未知",
+    ) -> str:
+        """格式化进群欢迎词，支持 {nickname}/{uid}/{qq}/{at}/{member_count}。"""
         text = str(template or "")
         for key, value in {
             "{nickname}": str(nickname or uid),
             "{uid}": str(uid),
             "{qq}": str(uid),
+            "{member_count}": str(member_count or "未知"),
         }.items():
             text = text.replace(key, value)
         return text
@@ -368,7 +385,13 @@ class JoinHandle:
             join_welcome = await self.db.get(gid, "join_welcome")
             if join_welcome:
                 nickname = await get_nickname(event, uid)
-                welcome = self._format_join_welcome(join_welcome, uid, nickname)
+                member_count = await self._get_group_member_count(client, gid)
+                welcome = self._format_join_welcome(
+                    join_welcome,
+                    uid,
+                    nickname,
+                    member_count,
+                )
                 chain = self._build_join_welcome_chain(welcome, uid)
                 await event.send(event.chain_result(chain))
             # 进群禁言
