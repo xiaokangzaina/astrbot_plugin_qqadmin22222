@@ -40,20 +40,77 @@ const els = {
   resetGroupBtn: document.getElementById("resetGroupBtn"),
 };
 
+function isValidThemePreference(value) {
+  return value === "light" || value === "dark" || value === "auto";
+}
+
+function loadThemePreferenceFromCookie() {
+  try {
+    const cookies = document.cookie ? document.cookie.split(";") : [];
+    const prefix = `${THEME_STORAGE_KEY}=`;
+    const matched = cookies
+      .map((item) => item.trim())
+      .find((item) => item.startsWith(prefix));
+    if (!matched) return null;
+    const value = decodeURIComponent(matched.slice(prefix.length));
+    return isValidThemePreference(value) ? value : null;
+  } catch {}
+  return null;
+}
+
+function saveThemePreferenceToCookie(value) {
+  try {
+    document.cookie = `${THEME_STORAGE_KEY}=${encodeURIComponent(value)}; max-age=31536000; path=/; SameSite=Lax`;
+  } catch {}
+}
+
 function loadThemePreference() {
   try {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === "light" || stored === "dark" || stored === "auto") {
+    if (isValidThemePreference(stored)) {
       return stored;
     }
   } catch {}
-  return "auto";
+  return loadThemePreferenceFromCookie() || "auto";
 }
 
 function saveThemePreference() {
   try {
     window.localStorage.setItem(THEME_STORAGE_KEY, themePreference);
   } catch {}
+  saveThemePreferenceToCookie(themePreference);
+}
+
+function setThemePreference(value) {
+  if (!isValidThemePreference(value)) {
+    return false;
+  }
+  themePreference = value;
+  saveThemePreference();
+  return true;
+}
+
+async function loadThemePreferenceFromBackend() {
+  if (!api) {
+    return;
+  }
+  try {
+    const result = await api.safeGet("/settings/theme");
+    const value = result?.theme || result;
+    const hasPersistedBackendTheme = result?.persisted === true;
+    if (hasPersistedBackendTheme || themePreference === "auto") {
+      setThemePreference(value);
+    } else {
+      saveThemePreferenceToBackend();
+    }
+  } catch {}
+}
+
+function saveThemePreferenceToBackend() {
+  if (!api) {
+    return;
+  }
+  api.safePost("/settings/theme", { theme: themePreference }).catch(() => {});
 }
 
 function getThemeButtonLabel() {
@@ -115,6 +172,7 @@ function cycleThemePreference() {
     themePreference = "auto";
   }
   saveThemePreference();
+  saveThemePreferenceToBackend();
   syncThemeFromContext(bridge?.getContext?.());
 }
 
@@ -443,6 +501,8 @@ async function init() {
 
   try {
     api = createApi(bridge);
+    await loadThemePreferenceFromBackend();
+    syncThemeFromContext(bridge?.getContext?.());
   } catch (error) {
     return;
   }

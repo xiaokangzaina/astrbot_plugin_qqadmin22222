@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+import json
+from pathlib import Path
 from typing import Any, cast
 
 from astrbot.api import logger
@@ -19,6 +21,32 @@ from .group_info_cache import QQGroupInfoCache
 from .page_service import QQAdminPageService
 
 PLUGIN_NAME = "astrbot_plugin_qqadmin"
+PLUGIN_DIR = Path(__file__).resolve().parent
+THEME_STATE_FILE = PLUGIN_DIR / "data" / "settings_theme.json"
+VALID_THEME_MODES = {"auto", "light", "dark"}
+
+
+def _read_theme_preference() -> str:
+    try:
+        payload = json.loads(THEME_STATE_FILE.read_text(encoding="utf-8"))
+        value = str(payload.get("theme", "auto")).strip().lower()
+        if value in VALID_THEME_MODES:
+            return value
+    except Exception:
+        pass
+    return "auto"
+
+
+def _write_theme_preference(value: str) -> str:
+    theme = str(value or "auto").strip().lower()
+    if theme not in VALID_THEME_MODES:
+        raise ValueError("invalid theme mode")
+    THEME_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    THEME_STATE_FILE.write_text(
+        json.dumps({"theme": theme}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return theme
 
 
 class QQAdminWebController:
@@ -40,6 +68,18 @@ class QQAdminWebController:
                 self.page_bootstrap,
                 ["GET"],
                 "Load settings page bootstrap data",
+            ),
+            (
+                "/settings/theme",
+                self.page_get_theme,
+                ["GET"],
+                "Load settings page theme preference",
+            ),
+            (
+                "/settings/theme",
+                self.page_save_theme,
+                ["POST"],
+                "Save settings page theme preference",
             ),
             (
                 "/settings/groups/refresh",
@@ -107,6 +147,22 @@ class QQAdminWebController:
         return self._jsonify(
             {"ok": True, "data": await self.service.get_bootstrap_payload()}
         )
+
+    async def page_get_theme(self):
+        return self._jsonify(
+            {
+                "ok": True,
+                "data": {
+                    "theme": _read_theme_preference(),
+                    "persisted": THEME_STATE_FILE.exists(),
+                },
+            }
+        )
+
+    async def page_save_theme(self):
+        payload = await self._request().get_json(force=True, silent=True) or {}
+        theme = _write_theme_preference(payload.get("theme", "auto"))
+        return self._jsonify({"ok": True, "data": {"theme": theme}})
 
     async def page_refresh_groups(self):
         return self._jsonify(
